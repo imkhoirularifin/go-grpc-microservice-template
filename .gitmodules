@@ -1,16 +1,30 @@
-# Centralized protobuf contracts are managed as a git submodule.
+# Polyrepo layout — each directory under repos/ is an independent repository.
 #
-# Setup:
-#   git submodule add -b v1.0.0 https://github.com/your-org/proto-contracts proto/contracts
-#   git submodule update --init --recursive
+# When splitting into separate GitHub repos, add them as submodules:
 #
-# Update to a new version:
-#   cd proto/contracts
-#   git fetch --tags
-#   git checkout v1.1.0
-#   cd ../..
-#   git add proto/contracts
-#   git commit -m "chore(proto): bump contracts to v1.1.0"
+#   git submodule add -b v1.0.0 https://github.com/your-org/proto-contracts repos/proto-contracts
+#   git submodule add -b v0.1.0 https://github.com/your-org/go-platform repos/go-platform
+#   git submodule add -b main https://github.com/your-org/gateway-service repos/gateway-service
+#   git submodule add -b main https://github.com/your-org/user-service repos/user-service
 #
-# This template ships with vendored example contracts in proto/contracts/.
-# Replace the directory with your submodule when adopting the template.
+# This template ships all repos vendored under repos/ for out-of-the-box local development.
+
+[submodule "repos/proto-contracts"]
+	path = repos/proto-contracts
+	url = https://github.com/imkhoirularifin/proto-contracts
+	branch = v1.0.0
+
+[submodule "repos/go-platform"]
+	path = repos/go-platform
+	url = https://github.com/imkhoirularifin/go-platform
+	branch = v0.1.0
+
+[submodule "repos/gateway-service"]
+	path = repos/gateway-service
+	url = https://github.com/imkhoirularifin/gateway-service
+	branch = main
+
+[submodule "repos/user-service"]
+	path = repos/user-service
+	url = https://github.com/imkhoirularifin/user-service
+	branch = main

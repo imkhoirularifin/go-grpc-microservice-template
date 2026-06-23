@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  lint-and-test:
+  orchestration:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,14 +24,14 @@ jobs:
       - name: Generate protobuf
         run: make proto
 
-      - name: Go mod tidy
-        run: go mod tidy
+      - name: Tidy all modules
+        run: make tidy
 
       - name: Verify generated code
         run: git diff --exit-code
 
-      - name: Test
+      - name: Test all repos
         run: make test
 
-      - name: Build
+      - name: Build services
         run: make build

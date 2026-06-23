@@ -1,17 +1,26 @@
 # Contributing
 
-Thank you for contributing to the Go gRPC Microservice Template. This guide explains how to set up your environment, follow conventions, and submit changes.
+Thank you for contributing. This template uses a **polyrepo** layout: each directory under `repos/` is an independent repository with its own `go.mod`, CI, and release cycle. The root repository orchestrates local development and deployment.
+
+## Repositories
+
+| Repo | Path | When to change |
+|------|------|----------------|
+| proto-contracts | `repos/proto-contracts` | API schema changes |
+| go-platform | `repos/go-platform` | Shared libraries used by 2+ services |
+| gateway-service | `repos/gateway-service` | HTTP routes, gRPC client wiring |
+| user-service | `repos/user-service` | User domain logic |
+| meta (this repo) | root | Tilt, K8s manifests, docs, orchestration |
 
 ## Prerequisites
 
 | Tool | Version | Purpose |
 |------|---------|---------|
 | Go | 1.22+ | Application runtime |
-| [Buf CLI](https://buf.build/docs/installation) | latest | Protobuf linting and code generation |
+| [Buf CLI](https://buf.build/docs/installation) | latest | Protobuf linting and codegen |
 | [Tilt](https://docs.tilt.dev/install.html) | latest | Local Kubernetes development |
 | Docker | latest | Container builds |
 | kubectl | latest | Kubernetes CLI |
-| kind or minikube | optional | Local Kubernetes cluster |
 
 ## Getting started
 
@@ -19,125 +28,93 @@ Thank you for contributing to the Go gRPC Microservice Template. This guide expl
 git clone https://github.com/imkhoirularifin/go-grpc-microservice-template.git
 cd go-grpc-microservice-template
 
-# Copy environment variables
-cp .env.example .env
+# Optional: use git submodules instead of vendored repos
+# git submodule update --init --recursive
 
-# Initialize proto contracts (submodule or vendored example)
-git submodule update --init --recursive
-
-# Generate protobuf code
 make proto
-
-# Download Go dependencies
-go mod tidy
+make tidy
 ```
+
+The root `go.work` file links all local repos for development without publishing modules.
 
 ## Local development with Tilt
 
-Tilt orchestrates protobuf generation, Docker builds, and Kubernetes deployments for local development.
-
 ```bash
-# Start a local cluster (example with kind)
 kind create cluster --name go-grpc-template
-
-# Run Tilt
 tilt up
 ```
 
-Open the Tilt UI (usually http://localhost:10350) to monitor resources. Port forwards:
-
-- Gateway HTTP: http://localhost:8080
-- User gRPC: localhost:50051
-- Gateway metrics: http://localhost:9090/metrics
-- User metrics: http://localhost:9091/metrics
-
-## Project structure
-
-```
-.
-├── cmd/                    # Service entrypoints
-│   ├── gateway/            # Fiber HTTP gateway
-│   └── user/               # gRPC user service
-├── internal/               # Private service code
-├── pkg/                    # Shared libraries (config, observability, grpc)
-├── lib/                    # HTTP helpers (dto, middleware, common)
-├── proto/contracts/        # Centralized protobuf (git submodule)
-├── gen/go/                 # Generated Go protobuf code (do not edit)
-├── deploy/                 # Docker, Kubernetes, monitoring manifests
-├── docs/                   # Documentation
-├── buf.yaml                # Buf module configuration
-├── buf.gen.yaml            # Buf code generation plugins
-└── Tiltfile                # Local development orchestration
-```
+Tilt builds from the meta-repo root using each service's Dockerfile and `go.work`.
 
 ## Development workflow
 
-1. Create a feature branch from `main`:
+1. Identify which repo your change belongs to (see table above).
+2. Create a feature branch in that repository.
+3. If changing `.proto` files, work in `repos/proto-contracts` first:
    ```bash
-   git checkout -b feature/my-change
-   ```
-
-2. If you change `.proto` files, regenerate code:
-   ```bash
-   make proto
+   cd repos/proto-contracts
    make proto-lint
+   make proto
    ```
-
-3. Run tests and build:
+4. Update dependent services and run tests from the meta repo:
    ```bash
    make test
    make build
    ```
-
-4. Commit with a clear message:
+5. Commit with a clear message:
    ```
-   feat(gateway): add user list endpoint
-   fix(user): handle missing pagination
-   chore(proto): bump contracts to v1.1.0
+   feat(gateway-service): add order routes
+   fix(proto-contracts): correct pagination field
+   chore(go-platform): export retry helper
    ```
-
-5. Open a pull request against `main`.
 
 ## Code conventions
 
 Follow patterns from [go-fiber-template](https://github.com/imkhoirularifin/go-fiber-template):
 
-- **Configuration**: environment variables via `caarlos0/env`, loaded in `pkg/config`
-- **Logging**: structured logging with `zerolog`
-- **HTTP handlers**: thin handlers in `internal/<service>/handler`, business logic in `service`
-- **Error handling**: centralized Fiber error handler in `lib/common`
-- **Dependency wiring**: explicit constructor injection (no global state in handlers)
+- **Configuration**: `go-platform/pkg/config` with environment variables
+- **Logging**: `go-platform/pkg/logger` (Zerolog)
+- **HTTP handlers**: thin handlers, logic in `internal/service`
+- **Cross-service APIs**: defined only in `proto-contracts`
 
-### Observability
+## Dependency management
 
-- All services initialize OpenTelemetry tracing via `pkg/observability`
-- Prometheus metrics are exposed on dedicated ports (`/metrics`)
-- Propagate trace context across HTTP → gRPC calls using OTel middleware
+### Local development
 
-### Protobuf contracts
+`go.work` at the repository root links all modules. Service `go.mod` files include `replace` directives for sibling repos:
 
-- Proto definitions live in a **centralized repository** linked as a git submodule at `proto/contracts`
-- Version contracts using git tags (`v1.0.0`, `v1.1.0`)
-- Never edit generated code in `gen/go/`
-- Run `make proto-breaking` before merging proto changes
+```go
+replace (
+    github.com/imkhoirularifin/go-platform => ../go-platform
+    github.com/imkhoirularifin/proto-contracts => ../proto-contracts
+)
+```
+
+### Production
+
+Pin tagged versions in each service `go.mod`:
+
+```go
+require (
+    github.com/imkhoirularifin/go-platform v0.1.0
+    github.com/imkhoirularifin/proto-contracts v1.0.0
+)
+```
+
+Remove `replace` directives before publishing service releases.
 
 ## Pull request checklist
 
-- [ ] `make proto-lint` passes
-- [ ] `make test` passes
+- [ ] Changes are in the correct repository
+- [ ] `make proto-lint` passes (if proto changed)
+- [ ] `make test` passes from meta repo root
 - [ ] `make build` succeeds
-- [ ] Generated code is committed when `.proto` files change
-- [ ] Documentation updated if behavior or setup changes
-- [ ] No secrets committed (use `.env`, not version control)
+- [ ] Generated code committed when `.proto` files change
+- [ ] README updated in affected repo(s)
 
-## Reporting issues
+## Splitting into real separate repos
 
-Open a GitHub issue with:
-
-- Steps to reproduce
-- Expected vs actual behavior
-- Environment (OS, Go version, Tilt version)
-- Relevant logs or traces
+See the root [README](../README.md#splitting-into-separate-github-repos) for instructions on pushing each `repos/*` directory to its own GitHub repository and wiring submodules.
 
 ## License
 

@@ -1,40 +1,34 @@
-# Tilt local development configuration
+# Tilt local development for polyrepo layout
 # Docs: https://docs.tilt.dev
-
-load('ext://restart_process', 'docker_build_with_restart')
 
 local_resource(
     'proto-gen',
     'make proto',
-    deps=['proto/contracts', 'buf.yaml', 'buf.gen.yaml'],
+    deps=['repos/proto-contracts', 'go.work'],
     labels=['build'],
 )
 
 docker_build(
     'go-grpc-template/user',
     '.',
-    dockerfile='deploy/docker/user.Dockerfile',
-    only=['cmd', 'internal', 'pkg', 'lib', 'gen', 'go.mod', 'go.sum'],
-    live_update=[
-        sync('./cmd', '/src/cmd'),
-        sync('./internal', '/src/internal'),
-        sync('./pkg', '/src/pkg'),
-        sync('./lib', '/src/lib'),
-        sync('./gen', '/src/gen'),
+    dockerfile='repos/user-service/Dockerfile',
+    only=[
+        'go.work',
+        'repos/go-platform',
+        'repos/proto-contracts',
+        'repos/user-service',
     ],
 )
 
 docker_build(
     'go-grpc-template/gateway',
     '.',
-    dockerfile='deploy/docker/gateway.Dockerfile',
-    only=['cmd', 'internal', 'pkg', 'lib', 'gen', 'go.mod', 'go.sum'],
-    live_update=[
-        sync('./cmd', '/src/cmd'),
-        sync('./internal', '/src/internal'),
-        sync('./pkg', '/src/pkg'),
-        sync('./lib', '/src/lib'),
-        sync('./gen', '/src/gen'),
+    dockerfile='repos/gateway-service/Dockerfile',
+    only=[
+        'go.work',
+        'repos/go-platform',
+        'repos/proto-contracts',
+        'repos/gateway-service',
     ],
 )
 

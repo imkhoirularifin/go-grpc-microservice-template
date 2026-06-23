@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package user.v1;
+
+import "common/v1/pagination.proto";
+
+option go_package = "github.com/imkhoirularifin/proto-contracts/gen/go/user/v1;userv1";
+
+message User {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string created_at = 4;
+}
+
+message GetUserRequest {
+  string id = 1;
+}
+
+message GetUserResponse {
+  User user = 1;
+}
+
+message ListUsersRequest {
+  common.v1.PaginationRequest pagination = 1;
+}
+
+message ListUsersResponse {
+  repeated User users = 1;
+  common.v1.PaginationResponse pagination = 2;
+}
+
+service UserService {
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+}

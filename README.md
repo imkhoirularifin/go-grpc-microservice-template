@@ -1,50 +1,73 @@
-# Go gRPC Microservice Template
+# Go gRPC Microservice Template (Polyrepo)
 
-A production-ready Go backend template for building microservices with **gRPC**, **Fiber HTTP gateway**, centralized **protobuf** contracts, **observability**, and **Kubernetes** deployment.
+A production-ready **polyrepo** backend template for building Go microservices with **gRPC**, **Fiber HTTP gateway**, centralized **protobuf** contracts, **observability**, and **Kubernetes** deployment.
 
 Inspired by [go-fiber-template](https://github.com/imkhoirularifin/go-fiber-template).
+
+## Polyrepo layout
+
+Each service and shared library lives in its own repository under `repos/`. The root repository is a **meta/orchestration repo** for local development (Tilt), deployment manifests, and documentation.
+
+```
+go-grpc-microservice-template/     # Meta repo (this repo)
+├── repos/
+│   ├── proto-contracts/           # Centralized .proto + generated Go stubs
+│   ├── go-platform/               # Shared Go libraries
+│   ├── gateway-service/           # Fiber HTTP gateway
+│   └── user-service/              # Example gRPC service
+├── deploy/                        # Kubernetes + monitoring manifests
+├── docs/                          # Contributing & feature guides
+├── go.work                        # Local Go workspace linking all repos
+├── Tiltfile                       # Local dev orchestration
+└── Makefile                       # Cross-repo commands
+```
+
+| Repository | Module | Responsibility |
+|------------|--------|----------------|
+| [proto-contracts](repos/proto-contracts) | `github.com/imkhoirularifin/proto-contracts` | API contracts, Buf codegen |
+| [go-platform](repos/go-platform) | `github.com/imkhoirularifin/go-platform` | Config, logging, OTel, gRPC helpers |
+| [gateway-service](repos/gateway-service) | `github.com/imkhoirularifin/gateway-service` | Fiber HTTP → gRPC proxy |
+| [user-service](repos/user-service) | `github.com/imkhoirularifin/user-service` | User gRPC service |
 
 ## Features
 
 | Area | Stack |
 |------|-------|
 | Language | Go 1.22 |
+| Architecture | Polyrepo with `go.work` for local dev |
 | HTTP | [Fiber v2](https://gofiber.io/) |
-| RPC | gRPC with centralized `.proto` contracts |
-| Proto tooling | [Buf](https://buf.build/docs) (lint, breaking changes, code generation) |
-| Proto versioning | Git submodule + semantic version tags |
-| Tracing | OpenTelemetry (OTLP gRPC exporter) |
-| Metrics | Prometheus (`/metrics` on dedicated ports) |
-| Logging | Zerolog (structured JSON / console) |
+| RPC | gRPC with versioned proto-contracts repo |
+| Proto tooling | [Buf](https://buf.build/docs) |
+| Tracing | OpenTelemetry (OTLP) |
+| Metrics | Prometheus |
 | Local dev | [Tilt](https://docs.tilt.dev) |
 | Deployment | Docker + Kubernetes (Kustomize) |
-| CI | GitHub Actions (buf lint, test, build) |
 
 ## Architecture
 
 ```mermaid
 flowchart TB
-    subgraph clients [Clients]
-        Browser[Browser / Mobile]
+    subgraph meta [Meta Repo]
+        Tilt[Tiltfile]
+        Deploy[deploy/]
+        Docs[docs/]
     end
 
-    subgraph platform [Platform]
-        GW[Gateway - Fiber HTTP :8080]
-        US[User Service - gRPC :50051]
+    subgraph repos [Independent Repos]
+        Proto[proto-contracts]
+        Platform[go-platform]
+        GW[gateway-service]
+        US[user-service]
     end
 
-    subgraph observability [Observability]
-        OTel[OTel Collector :4317]
-        Prom[Prometheus]
-    end
-
-    Browser --> GW
-    GW -->|gRPC + trace context| US
-    GW --> OTel
-    US --> OTel
-    OTel --> Prom
-    GW -->|/metrics :9090| Prom
-    US -->|/metrics :9091| Prom
+    Client --> GW
+    GW -->|gRPC| US
+    GW --> Platform
+    US --> Platform
+    GW --> Proto
+    US --> Proto
+    Tilt --> GW
+    Tilt --> US
 ```
 
 ## Quick start
@@ -53,8 +76,7 @@ flowchart TB
 
 - Go 1.22+
 - [Buf CLI](https://buf.build/docs/installation)
-- Docker
-- [Tilt](https://docs.tilt.dev/install.html) (recommended)
+- Docker + [Tilt](https://docs.tilt.dev/install.html)
 - kubectl + local Kubernetes (kind, minikube, or Docker Desktop)
 
 ### Setup
@@ -63,138 +85,71 @@ flowchart TB
 git clone https://github.com/imkhoirularifin/go-grpc-microservice-template.git
 cd go-grpc-microservice-template
 
-cp .env.example .env
-git submodule update --init --recursive   # proto contracts
+# Optional: replace vendored repos with git submodules
+# git submodule update --init --recursive
+
 make proto
-go mod tidy
+make tidy
 ```
 
 ### Run locally (without Kubernetes)
 
-Terminal 1 — user gRPC service:
-
 ```bash
-OTEL_SERVICE_NAME=user-service go run ./cmd/user
-```
+# Terminal 1
+cp repos/user-service/.env.example repos/user-service/.env
+cd repos/user-service && go run ./cmd
 
-Terminal 2 — HTTP gateway:
+# Terminal 2
+cp repos/gateway-service/.env.example repos/gateway-service/.env
+cd repos/gateway-service && go run ./cmd
 
-```bash
-OTEL_SERVICE_NAME=gateway go run ./cmd/gateway
-```
-
-Test:
-
-```bash
-curl http://localhost:8080/api/v1/healthz
 curl http://localhost:8080/api/v1/users/1
-curl http://localhost:8080/api/v1/users
 ```
 
-### Run with Tilt (recommended)
+### Run with Tilt
 
 ```bash
-kind create cluster --name go-grpc-template   # one-time setup
+kind create cluster --name go-grpc-template
 tilt up
 ```
 
-Tilt UI: http://localhost:10350
-
-## Project layout
-
-```
-.
-├── cmd/
-│   ├── gateway/              # Fiber HTTP entrypoint
-│   └── user/                 # gRPC user service entrypoint
-├── internal/
-│   ├── gateway/              # HTTP handlers + server wiring
-│   └── user/                 # gRPC handlers + business logic
-├── pkg/
-│   ├── config/               # Environment-based configuration
-│   ├── grpcutil/             # gRPC server/client with OTel
-│   ├── logger/               # Zerolog setup
-│   └── observability/        # Tracing + Prometheus metrics
-├── lib/                      # Shared HTTP utilities (dto, error handling)
-├── proto/contracts/          # Centralized protobuf (git submodule)
-├── gen/go/                   # Generated protobuf Go code
-├── deploy/
-│   ├── docker/               # Multi-stage Dockerfiles
-│   ├── kubernetes/           # Kustomize manifests
-│   └── monitoring/           # Prometheus + OTel collector configs
-├── docs/
-│   ├── CONTRIBUTING.md       # How to contribute
-│   └── ADDING_NEW_FEATURE.md # End-to-end feature guide
-├── buf.yaml / buf.gen.yaml   # Buf configuration
-├── Tiltfile                  # Local development orchestration
-└── Makefile                  # Common tasks
-```
-
-## Protobuf workflow
-
-Centralized contracts live in `proto/contracts/` as a **git submodule**:
+### Observability stack
 
 ```bash
-# First-time setup (replace with your proto repo)
-git submodule add -b v1.0.0 https://github.com/your-org/proto-contracts proto/contracts
-
-# Bump version
-cd proto/contracts && git checkout v1.1.0 && cd ../..
-make proto
+docker compose -f deploy/docker-compose.observability.yml up -d
 ```
 
+## Splitting into separate GitHub repos
+
+1. Create four repositories: `proto-contracts`, `go-platform`, `gateway-service`, `user-service`
+2. Push each `repos/<name>/` directory to its repository
+3. Tag `proto-contracts` and `go-platform` releases (`v1.0.0`, `v0.1.0`)
+4. In this meta repo, replace vendored dirs with submodules (see `.gitmodules`)
+5. Update service `go.mod` to pin tagged versions instead of `replace` directives
+
 ```bash
-make proto          # Generate Go code
-make proto-lint     # Lint .proto files
-make proto-breaking # Check breaking changes vs main
+git submodule add -b v1.0.0 https://github.com/your-org/proto-contracts repos/proto-contracts
+git submodule add -b v0.1.0 https://github.com/your-org/go-platform repos/go-platform
+git submodule add https://github.com/your-org/gateway-service repos/gateway-service
+git submodule add https://github.com/your-org/user-service repos/user-service
 ```
 
 ## Makefile targets
 
 | Command | Description |
 |---------|-------------|
-| `make proto` | Generate Go code from protobuf |
+| `make proto` | Generate Go code in proto-contracts |
 | `make proto-lint` | Lint protobuf definitions |
-| `make proto-breaking` | Detect breaking proto changes |
-| `make test` | Run unit tests |
+| `make test` | Run tests in all repos |
 | `make build` | Build gateway and user binaries |
-| `make run-gateway` | Run HTTP gateway |
-| `make run-user` | Run user gRPC service |
 | `make docker-build` | Build Docker images |
-| `make tilt` | Start Tilt local development |
-
-## Deployment
-
-### Docker
-
-```bash
-make docker-build
-```
-
-### Kubernetes
-
-```bash
-kubectl apply -k deploy/kubernetes/overlays/dev
-```
-
-Production overlays can be added under `deploy/kubernetes/overlays/production`.
-
-## Observability
-
-| Endpoint | Service | Purpose |
-|----------|---------|---------|
-| `http://localhost:8080/api/v1/healthz` | Gateway | Liveness |
-| `http://localhost:8080/api/v1/readyz` | Gateway | Readiness |
-| `http://localhost:9090/metrics` | Gateway | Prometheus metrics |
-| `http://localhost:9091/metrics` | User | Prometheus metrics |
-| `localhost:4317` | OTel Collector | OTLP trace ingestion |
-
-Configure via environment variables (see `.env.example`).
+| `make tilt` | Start Tilt |
 
 ## Documentation
 
-- [Contributing](docs/CONTRIBUTING.md) — setup, conventions, PR workflow
-- [Adding a new feature](docs/ADDING_NEW_FEATURE.md) — proto → gRPC → gateway → deploy
+- [Contributing](docs/CONTRIBUTING.md)
+- [Adding a new feature](docs/ADDING_NEW_FEATURE.md)
+- Per-repo READMEs in `repos/*/README.md`
 
 ## License
 
