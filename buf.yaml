@@ -1,0 +1,10 @@
+version: v2
+modules:
+  - path: proto/contracts
+    name: buf.build/your-org/contracts
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE
