@@ -1,50 +1,46 @@
-.PHONY: help proto proto-lint proto-breaking tidy test build run-gateway run-user docker-build tilt
+.PHONY: help proto proto-lint proto-breaking tidy test build docker-build tilt
 
-MODULE := github.com/imkhoirularifin/go-grpc-microservice-template
 BUF ?= buf
+PROTO_DIR := repos/proto-contracts
 
 help:
-	@echo "Targets:"
-	@echo "  proto          Generate Go code from protobuf definitions"
+	@echo "Polyrepo orchestration targets:"
+	@echo "  proto          Generate Go code in repos/proto-contracts"
 	@echo "  proto-lint     Lint protobuf definitions"
-	@echo "  proto-breaking Check breaking changes against main"
-	@echo "  tidy           Run go mod tidy"
-	@echo "  test           Run unit tests"
+	@echo "  proto-breaking Check breaking proto changes"
+	@echo "  tidy           Run go mod tidy in all repos"
+	@echo "  test           Run tests in all service repos"
 	@echo "  build          Build gateway and user service binaries"
-	@echo "  run-gateway    Run HTTP gateway locally"
-	@echo "  run-user       Run user gRPC service locally"
 	@echo "  docker-build   Build Docker images"
 	@echo "  tilt           Start local development with Tilt"
 
 proto:
-	$(BUF) dep update
-	$(BUF) generate
+	cd $(PROTO_DIR) && $(BUF) dep update && $(BUF) generate
 
 proto-lint:
-	$(BUF) lint
+	cd $(PROTO_DIR) && $(BUF) lint
 
 proto-breaking:
-	$(BUF) breaking --against '.git#branch=main'
+	cd $(PROTO_DIR) && $(BUF) breaking --against '.git#branch=main'
 
 tidy:
-	go mod tidy
+	cd repos/go-platform && go mod tidy
+	cd repos/proto-contracts && go mod tidy
+	cd repos/gateway-service && go mod tidy
+	cd repos/user-service && go mod tidy
 
 test:
-	go test ./...
+	cd repos/go-platform && go test ./...
+	cd repos/user-service && go test ./...
+	cd repos/gateway-service && go test ./...
 
-build: proto
-	go build -o bin/gateway ./cmd/gateway
-	go build -o bin/user ./cmd/user
-
-run-gateway:
-	go run ./cmd/gateway
-
-run-user:
-	go run ./cmd/user
+build:
+	cd repos/gateway-service && go build -o ../../bin/gateway ./cmd
+	cd repos/user-service && go build -o ../../bin/user ./cmd
 
 docker-build:
-	docker build -f deploy/docker/gateway.Dockerfile -t go-grpc-template/gateway:latest .
-	docker build -f deploy/docker/user.Dockerfile -t go-grpc-template/user:latest .
+	docker build -f repos/gateway-service/Dockerfile -t go-grpc-template/gateway:latest .
+	docker build -f repos/user-service/Dockerfile -t go-grpc-template/user:latest .
 
 tilt:
 	tilt up

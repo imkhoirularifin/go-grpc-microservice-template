@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  proto:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: repos/proto-contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bufbuild/buf-setup-action@v1
+      - run: make proto-lint
+      - run: make proto
+      - run: go mod tidy
+      - run: git diff --exit-code
