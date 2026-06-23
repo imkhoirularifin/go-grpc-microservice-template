@@ -1,0 +1,16 @@
+# Centralized protobuf contracts are managed as a git submodule.
+#
+# Setup:
+#   git submodule add -b v1.0.0 https://github.com/your-org/proto-contracts proto/contracts
+#   git submodule update --init --recursive
+#
+# Update to a new version:
+#   cd proto/contracts
+#   git fetch --tags
+#   git checkout v1.1.0
+#   cd ../..
+#   git add proto/contracts
+#   git commit -m "chore(proto): bump contracts to v1.1.0"
+#
+# This template ships with vendored example contracts in proto/contracts/.
+# Replace the directory with your submodule when adopting the template.
